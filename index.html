@@ -105,14 +105,14 @@
   .section-head p{color:var(--teal-soft);font-size:15.5px;margin:0}
 
   /* before / after */
-  .ba{position:relative;width:100%;aspect-ratio:16/9;border-radius:12px;overflow:hidden;border:1px solid var(--line);user-select:none;touch-action:none;background:#0c0c0c}
+  .ba{position:relative;width:100%;aspect-ratio:16/9;border-radius:12px;overflow:hidden;border:1px solid var(--line);user-select:none;touch-action:pan-y;background:#0c0c0c}
   .ba img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;pointer-events:none}
   .ba .after-img{clip-path:inset(0 0 0 var(--pos,50%))}
   .ba .tag{position:absolute;top:12px;font-size:11.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;padding:5px 11px;border-radius:7px;color:#fff}
   .ba .tag.before{left:25%;transform:translateX(-50%);background:rgba(18,63,58,.82)}
   .ba .tag.after{left:75%;transform:translateX(-50%);background:var(--orange)}
   .ba .divider{position:absolute;top:0;bottom:0;left:var(--pos,50%);width:3px;background:var(--orange);transform:translateX(-1.5px);pointer-events:none}
-  .ba .handle{position:absolute;top:50%;left:var(--pos,50%);width:44px;height:44px;transform:translate(-50%,-50%);border-radius:50%;background:var(--orange);display:flex;align-items:center;justify-content:center;color:#fff;box-shadow:0 2px 10px rgba(18,63,58,.35);cursor:ew-resize;border:3px solid #fff}
+  .ba .handle{position:absolute;top:50%;left:var(--pos,50%);width:44px;height:44px;transform:translate(-50%,-50%);border-radius:50%;background:var(--orange);display:flex;align-items:center;justify-content:center;color:#fff;box-shadow:0 2px 10px rgba(18,63,58,.35);cursor:ew-resize;border:3px solid #fff;touch-action:none}
   .ba .handle svg{pointer-events:none}
   .ba-note{text-align:center;color:var(--muted);font-size:12.5px;margin:11px 0 0}
 
@@ -258,18 +258,35 @@
   </footer>
 
 <script>
-/* before/after slider */
+/* before/after slider. On touch, only the orange handle slides the bar — a touch
+   anywhere else on the image scrolls the page normally. A mouse can drag anywhere. */
 (function(){
   var ba=document.getElementById('ba'); if(!ba) return;
-  var handle=ba.querySelector('.handle'); var pos=50;
+  var handle=ba.querySelector('.handle'); var pos=50; var dragging=false;
   function set(p){pos=Math.max(0,Math.min(100,p));ba.style.setProperty('--pos',pos+'%');handle.setAttribute('aria-valuenow',Math.round(pos));}
-  function fromEvent(e){var r=ba.getBoundingClientRect();var x=(e.touches?e.touches[0].clientX:e.clientX)-r.left;set(x/r.width*100);}
-  var dragging=false;
-  function down(e){dragging=true;fromEvent(e);e.preventDefault();}
-  function move(e){if(dragging)fromEvent(e);}
-  function up(){dragging=false;}
-  ba.addEventListener('mousedown',down);window.addEventListener('mousemove',move);window.addEventListener('mouseup',up);
-  ba.addEventListener('touchstart',down,{passive:false});window.addEventListener('touchmove',move,{passive:false});window.addEventListener('touchend',up);
+  function setFromX(x){var r=ba.getBoundingClientRect();set((x-r.left)/r.width*100);}
+  function onDown(e){
+    // touch: start only from the handle, so the rest of the image keeps scrolling
+    if(e.pointerType==='touch' && !handle.contains(e.target)) return;
+    dragging=true;
+    try{ ba.setPointerCapture(e.pointerId); }catch(_){}
+    setFromX(e.clientX); e.preventDefault();
+  }
+  function onMove(e){ if(dragging){ setFromX(e.clientX); e.preventDefault(); } }
+  function onUp(){ dragging=false; }
+  if(window.PointerEvent){
+    ba.addEventListener('pointerdown', onDown);
+    ba.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
+  } else {
+    ba.addEventListener('mousedown',function(e){dragging=true;setFromX(e.clientX);e.preventDefault();});
+    window.addEventListener('mousemove',function(e){if(dragging)setFromX(e.clientX);});
+    window.addEventListener('mouseup',onUp);
+    handle.addEventListener('touchstart',function(e){dragging=true;setFromX(e.touches[0].clientX);e.preventDefault();},{passive:false});
+    handle.addEventListener('touchmove',function(e){if(dragging){setFromX(e.touches[0].clientX);e.preventDefault();}},{passive:false});
+    window.addEventListener('touchend',onUp);
+  }
   handle.addEventListener('keydown',function(e){if(e.key==='ArrowLeft'){set(pos-4);e.preventDefault();}if(e.key==='ArrowRight'){set(pos+4);e.preventDefault();}});
   set(50);
 })();
